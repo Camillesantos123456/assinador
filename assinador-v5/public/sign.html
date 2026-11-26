@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Assinar documento</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Dancing+Script:wght@600&family=Great+Vibes&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body class="sgn">
+<div id="loading" class="msg">Carregando documento...</div>
+<div id="error" class="msg hide"></div>
+
+<div id="app" class="hide">
+  <div class="top">
+    <h1 id="ttl"></h1>
+    <span class="sp"></span>
+    <span id="progress" class="note" style="margin:0"></span>
+    <button id="btnNext" class="primary hide">Começar</button>
+    <button id="btnFinish" class="primary hide" disabled>Finalizar</button>
+    <span id="dls" class="dls"></span>
+  </div>
+  <div id="banner" class="banner hide"></div>
+  <div id="consent" class="banner hide">
+    <input type="checkbox" id="agree">
+    <label for="agree">Concordo em usar registros e assinaturas eletrônicas.</label>
+  </div>
+  <div class="pages" id="pages"></div>
+</div>
+
+<script src="common.js"></script>
+<script src="sign.js"></script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Assinador · Painel</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Dancing+Script:wght@600&family=Great+Vibes&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.3/dist/docx-preview.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login" class="center hide">
+  <h2>✍️ Assinador</h2>
+  <p class="note" style="margin:0 0 14px">Entre com a senha de administrador (variável ADMIN_PASSWORD do Netlify).</p>
+  <form id="loginForm">
+    <input type="password" id="pw" placeholder="Senha" autocomplete="current-password">
+    <p id="loginErr" style="color:#c00;font-size:13px;min-height:18px;margin:8px 0"></p>
+    <button class="primary" style="width:100%">Entrar</button>
+  </form>
+</div>
+
+<!-- LISTA -->
+<div id="v-list" class="hide">
+  <div class="top"><h1>✍️ Assinador</h1><span class="sp"></span>
+    <button id="logout" class="ghost">Sair</button>
+    <button id="newEnv" class="primary">Novo envelope</button></div>
+  <div class="wrap"><h2>Envelopes</h2><div id="list"></div></div>
+</div>
+
+<!-- CONFIGURAR ENVELOPE -->
+<div id="v-setup" class="hide">
+  <div class="top"><button class="iconbtn" id="sClose" title="Fechar">✕</button><h1>Configurar envelope</h1><span class="sp"></span>
+    <button class="primary" id="sNext" disabled>Seguinte: adicionar campos</button></div>
+  <div class="wrap">
+    <h2>Adicionar documentos</h2>
+    <div class="docs">
+      <div id="docchip" class="docchips"></div>
+      <div class="drop" id="drop">
+        <div>Solte seus PDFs ou Words aqui (pode ser mais de um) ou</div>
+        <button class="primary" id="pick">Fazer upload</button>
+        <input type="file" id="file" accept="application/pdf,.pdf,.docx" multiple hidden>
+        <div id="conv" class="note" style="color:#4c00ff;font-weight:600"></div>
+        <div class="note">PDF ou Word (.docx), até 6 MB <b>cada documento</b> (pode enviar vários no mesmo envelope). O Word é convertido para PDF no navegador antes de colocar os campos (como no DocuSign).</div>
+      </div>
+    </div>
+
+    <h2>Adicionar destinatários</h2>
+    <label class="chk"><input type="checkbox" id="ord" checked> Definir ordem de assinatura</label>
+    <div id="rlist"></div>
+    <button id="addR">+ Adicionar destinatário</button>
+
+    <h2>Adicionar mensagem</h2>
+    <div class="card">
+      <label class="lb" for="title">Título do envelope *</label>
+      <input type="text" id="title">
+      <div style="height:14px"></div>
+      <label class="lb" for="msg">Mensagem para os destinatários</label>
+      <textarea id="msg" placeholder="Opcional"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ADICIONAR CAMPOS -->
+<div id="v-fields" class="hide">
+  <div class="top">
+    <button class="iconbtn" id="fClose" title="Fechar">✕</button>
+    <button class="iconbtn" id="fBack" title="Voltar">←</button>
+    <span class="crumb"><a href="#" id="fCrumb">Configurar envelope</a> › <b>Adicionar campos</b></span>
+    <span class="sp"></span>
+    <button class="primary" id="fSend">Enviar</button>
+  </div>
+  <div class="editor">
+    <div class="side" id="side"></div>
+    <div class="stage">
+      <div class="tools">
+        <span>Zoom</span>
+        <select id="zoom"><option value="0.75">75%</option><option value="1">100%</option><option value="1.25" selected>125%</option><option value="1.5">150%</option><option value="1.75">175%</option></select>
+        <span class="note" id="pgcount" style="margin:0"></span>
+      </div>
+      <div class="pages" id="pages"></div>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
