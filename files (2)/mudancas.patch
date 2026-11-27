@@ -1,0 +1,259 @@
+diff --git a/assinador-v5/netlify/functions/lib/core.mjs b/assinador-v5/netlify/functions/lib/core.mjs
+index afb3e88..6a36716 100644
+--- a/assinador-v5/netlify/functions/lib/core.mjs
++++ b/assinador-v5/netlify/functions/lib/core.mjs
+@@ -115,9 +115,26 @@ async function buildFinal(e, original, di) {
+       const bytes = dataUrlBytes(v);
+       if (!bytes) continue;
+       const img = await doc.embedPng(bytes);
+-      const sc = Math.min(w / img.width, h / img.height);
+-      const iw = img.width * sc, ih = img.height * sc;
+-      pg.drawImage(img, { x: x + (w - iw) / 2, y: y + (h - ih) / 2, width: iw, height: ih });
++      if (f.type === 'initials') {
++        const sc = Math.min(w / img.width, h / img.height);
++        const iw = img.width * sc, ih = img.height * sc;
++        pg.drawImage(img, { x: x + (w - iw) / 2, y: y + (h - ih) / 2, width: iw, height: ih });
++      } else {
++        // carimbo "Assinado por:" compacto (não cobre o texto do documento)
++        const purple = rgb(0.30, 0, 0.78), fs = Math.max(3.5, Math.min(5.5, h * 0.14)), pad = 1.5, tk = 3;
++        const label = 'Assinado por:', idTxt = crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 16).toUpperCase() + '...';
++        const lw = bold.widthOfTextAtSize(label, fs), iw2 = font.widthOfTextAtSize(idTxt, fs * 0.9);
++        const ln = (x1, y1, x2, y2) => pg.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 0.8, color: purple });
++        ln(x, y, x, y + h);                                   // barra vertical
++        ln(x, y + h, x + tk, y + h); ln(x + tk + lw + 4, y + h, x + w * 0.9, y + h);   // topo (com o texto no meio)
++        ln(x, y, x + tk, y); ln(x + tk + iw2 + 4, y, x + w * 0.9, y);                  // base
++        pg.drawText(label, { x: x + tk + 2, y: y + h - fs * 0.35, size: fs, font: bold, color: rgb(0, 0, 0) });
++        pg.drawText(idTxt, { x: x + tk + 2, y: y - fs * 0.35, size: fs * 0.9, font, color: rgb(0.35, 0.35, 0.35) });
++        const top = y + h - fs - pad, bot = y + fs * 0.6 + pad, ah = Math.max(4, top - bot), aw = w - tk - 4;
++        const sc = Math.min(aw / img.width, ah / img.height, 1);
++        const sw = img.width * sc, sh = img.height * sc;
++        pg.drawImage(img, { x: x + tk + 2, y: bot + (ah - sh) / 2, width: sw, height: sh });
++      }
+     } else if (f.type === 'checkbox') {
+       if (v === 'true') {
+         const p = Math.min(w, h) * 0.2;
+diff --git a/assinador-v5/public/app.js b/assinador-v5/public/app.js
+index 1720cdc..6bd19b1 100644
+--- a/assinador-v5/public/app.js
++++ b/assinador-v5/public/app.js
+@@ -318,15 +318,35 @@ function renderSide() {
+     side.append(el('h3', {}, g));
+     side.append(el('div', { class: 'pal' }, items.map(([t, m]) => el('button', {
+       draggable: 'true', id: 'pal-' + t, class: S.armed === t ? 'armed' : '',
+-      ondragstart: e => { e.dataTransfer.setData('text/plain', 'type:' + t); S.armed = null; document.body.classList.remove('armed'); },
++      ondragstart: e => { e.dataTransfer.setData('text/plain', 'type:' + t); S.armed = null; document.body.classList.remove('armed'); hideGhost(); const g = makeGhost(t); g.style.cssText += ';position:fixed;left:-999px;top:-999px'; document.body.append(g); try { e.dataTransfer.setDragImage(g, g.offsetWidth / 2, g.offsetHeight / 2); } catch { } setTimeout(() => g.remove(), 0); },
+       onclick: () => { S.armed === t ? disarm() : arm(t); },
+     }, el('span', { class: 'ic' }, m.ic), m.label))));
+   }
+   side.append(el('div', { class: 'prop', id: 'props' }));
+   renderProps();
+ }
+-function arm(t) { S.armed = t; document.body.classList.add('armed'); document.querySelectorAll('.pal button').forEach(b => b.classList.toggle('armed', b.id === 'pal-' + t)); toast('Clique no documento onde quer colocar o campo'); }
+-function disarm() { S.armed = null; document.body.classList.remove('armed'); document.querySelectorAll('.pal button').forEach(b => b.classList.remove('armed')); }
++/* fantasma: o campo (ex.: "Assinar") acompanha o cursor no lugar da cruz "+" */
++let ghost = null;
++function makeGhost(t) {
++  const m = FIELD_META[t], r = S.recipients.find(x => x.id === S.activeR);
++  const isSig = t === 'signature' || t === 'initials';
++  const lab = el('span', {}, isSig ? (t === 'initials' ? 'Rubrica' : 'Assinar') : `${m.ic} ${m.label}`);
++  if (isSig) lab.insertAdjacentHTML('beforeend', PEN_SVG);
++  const g = el('div', { class: 'fbox ghost' + (isSig ? ' sigf' : ''), style: `--c:${r ? r.color : '#999'};width:${m.w * S.zoom}px;height:${m.h * S.zoom}px` }, lab);
++  g.classList.toggle('tiny', m.h * S.zoom < 22);
++  return g;
++}
++function hideGhost() { ghost?.remove(); ghost = null; }
++document.addEventListener('pointermove', e => {
++  if (!S.armed) return;
++  const over = e.target.closest && e.target.closest('.ov');
++  if (!over) { if (ghost) ghost.style.display = 'none'; return; }
++  if (!ghost) { ghost = makeGhost(S.armed); ghost.style.position = 'fixed'; ghost.style.pointerEvents = 'none'; ghost.style.zIndex = 70; ghost.style.opacity = '.85'; document.body.append(ghost); }
++  ghost.style.display = 'flex';
++  ghost.style.left = (e.clientX - ghost.offsetWidth / 2) + 'px'; ghost.style.top = (e.clientY - ghost.offsetHeight / 2) + 'px';
++});
++function arm(t) { hideGhost(); S.armed = t; document.body.classList.add('armed'); document.querySelectorAll('.pal button').forEach(b => b.classList.toggle('armed', b.id === 'pal-' + t)); toast('Clique no documento onde quer colocar o campo'); }
++function disarm() { hideGhost(); S.armed = null; document.body.classList.remove('armed'); document.querySelectorAll('.pal button').forEach(b => b.classList.remove('armed')); }
+ 
+ function renderProps() {
+   const box = $('#props'); if (!box) return; box.innerHTML = '';
+@@ -357,7 +377,10 @@ function addField(type, pageIdx, cx, cy) {
+ function mountField(f) {
+   const p = S.pg[f.page]; if (!p) return;
+   const m = FIELD_META[f.type], r = S.recipients.find(x => x.id === f.recipientId);
+-  const d = el('div', { class: 'fbox', style: `--c:${r ? r.color : '#999'}` }, el('span', {}, `${m.ic} ${m.label}`), el('div', { class: 'h' }));
++  const isSig = f.type === 'signature' || f.type === 'initials';
++  const lab = el('span', {}, isSig ? (f.type === 'initials' ? 'Rubrica' : 'Assinar') : `${m.ic} ${m.label}`);
++  if (isSig) lab.insertAdjacentHTML('beforeend', PEN_SVG);
++  const d = el('div', { class: 'fbox' + (isSig ? ' sigf' : ''), style: `--c:${r ? r.color : '#999'}` }, lab, ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].map(k => { const h = el('div', { class: 'h h-' + k }); h.dataset.dir = k; return h; }));
+   els.set(f.id, d); place(f); p.ov.append(d);
+   d.onpointerdown = e => {
+     if (e.target.classList.contains('h')) return;
+@@ -366,18 +389,28 @@ function mountField(f) {
+     d.onpointermove = ev => { f.x = clamp(ox + (ev.clientX - sx) / p.w, 0, 1 - f.w); f.y = clamp(oy + (ev.clientY - sy) / p.h, 0, 1 - f.h); place(f); };
+     d.onpointerup = () => { d.onpointermove = d.onpointerup = null; updateMarks(); };
+   };
+-  const h = d.querySelector('.h');
+-  h.onpointerdown = e => {
+-    e.stopPropagation(); select(f.id); h.setPointerCapture(e.pointerId);
+-    const sx = e.clientX, sy = e.clientY, ow = f.w, oh = f.h;
+-    h.onpointermove = ev => { f.w = clamp(ow + (ev.clientX - sx) / p.w, 8 / p.w, 1 - f.x); f.h = clamp(oh + (ev.clientY - sy) / p.h, 8 / p.h, 1 - f.y); place(f); };
+-    h.onpointerup = () => { h.onpointermove = h.onpointerup = null; updateMarks(); };
+-  };
++  d.querySelectorAll('.h').forEach(h => {
++    const dir = h.dataset.dir;
++    h.onpointerdown = e => {
++      e.stopPropagation(); select(f.id); h.setPointerCapture(e.pointerId);
++      const sx = e.clientX, sy = e.clientY, ox = f.x, oy = f.y, ow = f.w, oh = f.h, mw = 6 / p.w, mh = 6 / p.h;
++      h.onpointermove = ev => {
++        const dx = (ev.clientX - sx) / p.w, dy = (ev.clientY - sy) / p.h;
++        if (dir.includes('e')) f.w = clamp(ow + dx, mw, 1 - ox);
++        if (dir.includes('w')) { const nx = clamp(ox + dx, 0, ox + ow - mw); f.x = nx; f.w = ow - (nx - ox); }
++        if (dir.includes('s')) f.h = clamp(oh + dy, mh, 1 - oy);
++        if (dir.includes('n')) { const ny = clamp(oy + dy, 0, oy + oh - mh); f.y = ny; f.h = oh - (ny - oy); }
++        place(f);
++      };
++      h.onpointerup = () => { h.onpointermove = h.onpointerup = null; updateMarks(); };
++    };
++  });
+   if (S.sel === f.id) d.classList.add('sel');
+ }
+ function place(f) {
+   const p = S.pg[f.page], d = els.get(f.id); if (!p || !d) return;
+   Object.assign(d.style, { left: f.x * p.w + 'px', top: f.y * p.h + 'px', width: f.w * p.w + 'px', height: f.h * p.h + 'px' });
++  if (d.classList.contains('sigf')) { const hp = f.h * p.h; d.style.fontSize = clamp(hp * 0.3, 6, 12) + 'px'; d.classList.toggle('tiny', hp < 22); }
+ }
+ function remount(f) { els.get(f.id)?.remove(); mountField(f); }
+ function select(id) {
+diff --git a/assinador-v5/public/common.js b/assinador-v5/public/common.js
+index 9777698..dd78d52 100644
+--- a/assinador-v5/public/common.js
++++ b/assinador-v5/public/common.js
+@@ -11,8 +11,8 @@ const el = (tag, attrs = {}, ...kids) => {
+ };
+ 
+ const FIELD_META = {
+-  signature: { label: 'Assinatura', ic: '✒️', w: 150, h: 40, group: 'Assinatura' },
+-  initials: { label: 'Rubrica', ic: 'AZ', w: 60, h: 30, group: 'Assinatura' },
++  signature: { label: 'Assinatura', ic: '✒️', w: 100, h: 26, group: 'Assinatura' },
++  initials: { label: 'Rubrica', ic: 'AZ', w: 44, h: 22, group: 'Assinatura' },
+   date: { label: 'Data da assinatura', ic: '📅', w: 100, h: 18, group: 'Assinatura' },
+   name: { label: 'Nome', ic: '👤', w: 130, h: 18, group: 'Informações de contato' },
+   email: { label: 'E-mail', ic: '✉️', w: 170, h: 18, group: 'Informações de contato' },
+@@ -24,6 +24,24 @@ const FIELD_META = {
+   dropdown: { label: 'Lista suspensa', ic: '▾', w: 130, h: 18, group: 'Entradas' },
+ };
+ 
++const PEN_SVG = '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M14.5 5.5l4 4L8 20H4v-4z"/></svg>';
++
++/* Carimbo "Assinado por:" (mesmo ID curto usado no PDF final: SHA-256 da imagem da assinatura) */
++async function sigId(dataUrl) {
++  try {
++    const bin = atob(dataUrl.split(',')[1] || ''), u = new Uint8Array(bin.length);
++    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
++    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', u));
++    return [...h].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16).toUpperCase() + '...';
++  } catch { return ''; }
++}
++function stampEl(dataUrl, initialsOnly) {
++  if (initialsOnly) return el('img', { src: dataUrl, class: 'sigimg' });
++  const id = el('span', { class: 'stid' });
++  sigId(dataUrl).then(v => { id.textContent = v; });
++  return el('div', { class: 'stamp' }, el('span', { class: 'stlb' }, 'Assinado por:'), el('img', { src: dataUrl, class: 'sigimg' }), id);
++}
++
+ /* ---------- páginas do PDF com renderização preguiçosa (aguenta PDFs grandes) ---------- */
+ function buildPages(container, pdf, metas, scale, onOverlay) {
+   container.innerHTML = '';
+diff --git a/assinador-v5/public/sign.js b/assinador-v5/public/sign.js
+index 50a7375..2c614bf 100644
+--- a/assinador-v5/public/sign.js
++++ b/assinador-v5/public/sign.js
+@@ -81,7 +81,7 @@ function setupFields() {
+     if (!(f.mine && interactive)) {
+       if (!f.value) continue;
+       const d = el('div', { class: 'sf ro' }); place(d);
+-      if (f.type === 'signature' || f.type === 'initials') d.append(el('img', { src: f.value }));
++      if (f.type === 'signature' || f.type === 'initials') { d.classList.add('sigdone'); d.append(stampEl(f.value, f.type === 'initials')); }
+       else d.textContent = f.type === 'checkbox' ? (f.value === 'true' ? '✕' : '') : f.value;
+       d.style.fontSize = Math.max(8, Math.min(14, f.h * p.h * 0.6)) + 'px';
+       p.ov.append(d); continue;
+@@ -113,13 +113,14 @@ function draw(f) {
+   const d = boxes.get(f.id); if (!d) return;
+   if (f.type === 'signature' || f.type === 'initials') {
+     d.innerHTML = '';
+-    if (vals[f.id]) { d.append(el('img', { src: vals[f.id] })); d.classList.add('done'); }
++    if (vals[f.id]) { d.append(stampEl(vals[f.id], f.type === 'initials')); d.classList.add('done', 'sigdone'); }
+     else {
+       const ini = f.type === 'initials';
+       const btn = el('span', { class: 'signbtn' }, el('span', {}, ini ? 'Rubrica' : 'Assinar'));
+-      btn.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M14.5 5.5l4 4L8 20H4v-4z"/></svg>');
++      btn.insertAdjacentHTML('beforeend', PEN_SVG);
++      btn.classList.toggle('tiny', d.offsetHeight < 24);
+       d.append(el('span', { class: 'signtag' }, `${f.required ? 'Exigido' : 'Opcional'} - ${ini ? 'Rubricar aqui' : 'Assinar aqui'}`), btn);
+-      d.classList.remove('done');
++      d.classList.remove('done', 'sigdone');
+     }
+   } else if (f.type === 'checkbox') {
+     d.textContent = vals[f.id] ? '✕' : ''; d.classList.toggle('done', !!vals[f.id]);
+diff --git a/assinador-v5/public/style.css b/assinador-v5/public/style.css
+index 0e67a51..13a3711 100644
+--- a/assinador-v5/public/style.css
++++ b/assinador-v5/public/style.css
+@@ -72,11 +72,17 @@ label.lb{display:block;font-weight:600;margin:0 0 5px;font-size:14px}
+ .page{position:relative;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18);flex:none}
+ .page canvas{display:block}
+ .ov{position:absolute;inset:0}
+-body.armed .ov{cursor:crosshair}
++body.armed .ov{cursor:none}
+ .fbox{position:absolute;border:2px solid color-mix(in srgb,var(--c) 70%,#000);background:color-mix(in srgb,var(--c) 45%,transparent);border-radius:4px;display:flex;align-items:center;gap:4px;padding:0 4px;font-size:11px;color:#111;cursor:move;touch-action:none;overflow:hidden;white-space:nowrap;user-select:none}
+ .fbox.sel{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--p);overflow:visible}
+-.fbox .h{position:absolute;right:-6px;bottom:-6px;width:12px;height:12px;background:var(--p);border-radius:3px;cursor:nwse-resize;display:none}
++.fbox .h{position:absolute;background:var(--p);display:none;z-index:2;touch-action:none}
+ .fbox.sel .h{display:block}
++.fbox .h-n,.fbox .h-s{left:8px;right:8px;height:6px;border-radius:3px;cursor:ns-resize}
++.fbox .h-e,.fbox .h-w{top:8px;bottom:8px;width:6px;border-radius:3px;cursor:ew-resize}
++.fbox .h-n{top:-4px}.fbox .h-s{bottom:-4px}.fbox .h-e{right:-4px}.fbox .h-w{left:-4px}
++.fbox .h-ne,.fbox .h-nw,.fbox .h-se,.fbox .h-sw{width:10px;height:10px;border-radius:3px}
++.fbox .h-ne{top:-6px;right:-6px;cursor:nesw-resize}.fbox .h-nw{top:-6px;left:-6px;cursor:nwse-resize}
++.fbox .h-se{bottom:-6px;right:-6px;cursor:nwse-resize}.fbox .h-sw{bottom:-6px;left:-6px;cursor:nesw-resize}
+ .hint{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--tx);color:#fff;padding:10px 16px;border-radius:8px;z-index:60;font-size:14px}
+ 
+ /* modais */
+@@ -119,10 +125,10 @@ body.armed .ov{cursor:crosshair}
+ .dls{display:flex;gap:8px;flex-wrap:wrap}
+ .mailerr{color:#b45309;font-size:12px}
+ 
+-.sf:has(.signbtn){overflow:visible;background:transparent;border:0;min-width:84px;min-height:58px}
+-.signbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;width:100%;height:100%;background:#4c00c8;color:#fff;border-radius:6px;box-shadow:0 0 0 2px #fff,0 0 0 4px #4c00c8;font-size:12px;font-weight:600;pointer-events:none}
+-.signbtn svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+-.signtag{position:absolute;bottom:calc(100% + 6px);left:0;background:#eee;border:1px solid #bbb;padding:1px 6px;font-size:12px;font-weight:400;color:#222;white-space:nowrap;pointer-events:none}
++.sf:has(.signbtn){overflow:visible;background:transparent;border:0}
++.signbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:100%;height:100%;background:rgba(34,211,238,.4);border:2px solid #22b8cf;color:#083344;border-radius:4px;font-size:11px;font-weight:600;line-height:1.1;pointer-events:none}
++.signbtn svg,.fbox.sigf svg{height:min(60%,18px);width:auto;aspect-ratio:1;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
++.signtag{position:absolute;bottom:calc(100% + 2px);left:0;background:#eee;border:1px solid #bbb;padding:0 4px;font-size:10px;font-weight:400;color:#222;white-space:nowrap;pointer-events:none}
+ 
+ /* destinatários (cartões com ordem) */
+ .av{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--c);color:#0b1b3a;font-size:12px;font-weight:600;flex:none}
+@@ -165,3 +171,23 @@ body.armed .ov{cursor:crosshair}
+ .tnum{text-align:center;padding:6px 0 2px;font-size:14px}
+ .page{scroll-margin-top:56px}
+ @media(max-width:1100px){.thumbs{display:none}}
++
++/* campo de assinar no editor (mesmo visual do botão "Assinar" do destinatário) */
++.fbox.sigf{flex-direction:column;justify-content:center;gap:1px;padding:0;border-color:#22b8cf;background:color-mix(in srgb,var(--c) 55%,#fff);text-align:center;font-size:11px;font-weight:600;overflow:hidden}
++.fbox.sigf span{display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.1}
++.fbox.sigf.sel{overflow:visible}
++
++/* assinatura aplicada: carimbo pequeno "Assinado por:", não cobre o texto */
++.sf.sigdone{background:transparent;border:0;align-items:stretch;justify-content:flex-start;overflow:visible}
++.stamp{position:relative;width:100%;height:100%;border-left:1.5px solid #4c00c8;border-top:1.5px solid #4c00c8;border-bottom:1.5px solid #4c00c8;border-radius:3px 0 0 3px;display:flex;flex-direction:column;justify-content:space-between;padding:0 0 0 4px}
++.stlb,.stid{font-size:7px;font-weight:700;line-height:1;color:#111;white-space:nowrap}
++.stid{font-weight:400;color:#555;font-size:6px}
++.stamp .sigimg{flex:1;min-height:0;max-width:calc(100% - 4px);object-fit:contain;object-position:left center;align-self:flex-start;margin:1px 0}
++.sf.sigdone>.sigimg{object-fit:contain;object-position:left center}
++
++.fbox.sigf.tiny{flex-direction:row;justify-content:center;gap:4px}
++.fbox.sigf.tiny span{flex-direction:row;gap:3px}
++.fbox.sigf.tiny svg{height:70%}
++.fbox.ghost{border-style:dashed}
++.signbtn.tiny{flex-direction:row;gap:3px;font-size:10px}
++.signbtn.tiny svg{height:70%}
