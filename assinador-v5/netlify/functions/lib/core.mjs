@@ -115,9 +115,26 @@ async function buildFinal(e, original, di) {
       const bytes = dataUrlBytes(v);
       if (!bytes) continue;
       const img = await doc.embedPng(bytes);
-      const sc = Math.min(w / img.width, h / img.height);
-      const iw = img.width * sc, ih = img.height * sc;
-      pg.drawImage(img, { x: x + (w - iw) / 2, y: y + (h - ih) / 2, width: iw, height: ih });
+      if (f.type === 'initials') {
+        const sc = Math.min(w / img.width, h / img.height);
+        const iw = img.width * sc, ih = img.height * sc;
+        pg.drawImage(img, { x: x + (w - iw) / 2, y: y + (h - ih) / 2, width: iw, height: ih });
+      } else {
+        // carimbo "Assinado por:" compacto (não cobre o texto do documento)
+        const purple = rgb(0.30, 0, 0.78), fs = Math.max(3.5, Math.min(5.5, h * 0.14)), pad = 1.5, tk = 3;
+        const label = 'Assinado por:', idTxt = crypto.createHash('sha256').update(bytes).digest('hex').slice(0, 16).toUpperCase() + '...';
+        const lw = bold.widthOfTextAtSize(label, fs), iw2 = font.widthOfTextAtSize(idTxt, fs * 0.9);
+        const ln = (x1, y1, x2, y2) => pg.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 0.8, color: purple });
+        ln(x, y, x, y + h);                                   // barra vertical
+        ln(x, y + h, x + tk, y + h); ln(x + tk + lw + 4, y + h, x + w * 0.9, y + h);   // topo (com o texto no meio)
+        ln(x, y, x + tk, y); ln(x + tk + iw2 + 4, y, x + w * 0.9, y);                  // base
+        pg.drawText(label, { x: x + tk + 2, y: y + h - fs * 0.35, size: fs, font: bold, color: rgb(0, 0, 0) });
+        pg.drawText(idTxt, { x: x + tk + 2, y: y - fs * 0.35, size: fs * 0.9, font, color: rgb(0.35, 0.35, 0.35) });
+        const top = y + h - fs - pad, bot = y + fs * 0.6 + pad, ah = Math.max(4, top - bot), aw = w - tk - 4;
+        const sc = Math.min(aw / img.width, ah / img.height, 1);
+        const sw = img.width * sc, sh = img.height * sc;
+        pg.drawImage(img, { x: x + tk + 2, y: bot + (ah - sh) / 2, width: sw, height: sh });
+      }
     } else if (f.type === 'checkbox') {
       if (v === 'true') {
         const p = Math.min(w, h) * 0.2;

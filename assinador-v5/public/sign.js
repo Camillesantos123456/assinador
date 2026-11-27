@@ -81,7 +81,7 @@ function setupFields() {
     if (!(f.mine && interactive)) {
       if (!f.value) continue;
       const d = el('div', { class: 'sf ro' }); place(d);
-      if (f.type === 'signature' || f.type === 'initials') d.append(el('img', { src: f.value }));
+      if (f.type === 'signature' || f.type === 'initials') { d.classList.add('sigdone'); d.append(stampEl(f.value, f.type === 'initials')); }
       else d.textContent = f.type === 'checkbox' ? (f.value === 'true' ? '✕' : '') : f.value;
       d.style.fontSize = Math.max(8, Math.min(14, f.h * p.h * 0.6)) + 'px';
       p.ov.append(d); continue;
@@ -113,13 +113,13 @@ function draw(f) {
   const d = boxes.get(f.id); if (!d) return;
   if (f.type === 'signature' || f.type === 'initials') {
     d.innerHTML = '';
-    if (vals[f.id]) { d.append(el('img', { src: vals[f.id] })); d.classList.add('done'); }
+    if (vals[f.id]) { d.append(stampEl(vals[f.id], f.type === 'initials')); d.classList.add('done', 'sigdone'); }
     else {
       const ini = f.type === 'initials';
       const btn = el('span', { class: 'signbtn' }, el('span', {}, ini ? 'Rubrica' : 'Assinar'));
-      btn.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M14.5 5.5l4 4L8 20H4v-4z"/></svg>');
+      btn.insertAdjacentHTML('beforeend', PEN_SVG);
       d.append(el('span', { class: 'signtag' }, `${f.required ? 'Exigido' : 'Opcional'} - ${ini ? 'Rubricar aqui' : 'Assinar aqui'}`), btn);
-      d.classList.remove('done');
+      d.classList.remove('done', 'sigdone');
     }
   } else if (f.type === 'checkbox') {
     d.textContent = vals[f.id] ? '✕' : ''; d.classList.toggle('done', !!vals[f.id]);

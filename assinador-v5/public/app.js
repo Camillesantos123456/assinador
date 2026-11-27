@@ -357,7 +357,10 @@ function addField(type, pageIdx, cx, cy) {
 function mountField(f) {
   const p = S.pg[f.page]; if (!p) return;
   const m = FIELD_META[f.type], r = S.recipients.find(x => x.id === f.recipientId);
-  const d = el('div', { class: 'fbox', style: `--c:${r ? r.color : '#999'}` }, el('span', {}, `${m.ic} ${m.label}`), el('div', { class: 'h' }));
+  const isSig = f.type === 'signature' || f.type === 'initials';
+  const lab = el('span', {}, isSig ? (f.type === 'initials' ? 'Rubrica' : 'Assinar') : `${m.ic} ${m.label}`);
+  if (isSig) lab.insertAdjacentHTML('beforeend', PEN_SVG);
+  const d = el('div', { class: 'fbox' + (isSig ? ' sigf' : ''), style: `--c:${r ? r.color : '#999'}` }, lab, el('div', { class: 'h' }));
   els.set(f.id, d); place(f); p.ov.append(d);
   d.onpointerdown = e => {
     if (e.target.classList.contains('h')) return;

@@ -11,8 +11,8 @@ const el = (tag, attrs = {}, ...kids) => {
 };
 
 const FIELD_META = {
-  signature: { label: 'Assinatura', ic: '✒️', w: 150, h: 40, group: 'Assinatura' },
-  initials: { label: 'Rubrica', ic: 'AZ', w: 60, h: 30, group: 'Assinatura' },
+  signature: { label: 'Assinatura', ic: '✒️', w: 110, h: 38, group: 'Assinatura' },
+  initials: { label: 'Rubrica', ic: 'AZ', w: 50, h: 26, group: 'Assinatura' },
   date: { label: 'Data da assinatura', ic: '📅', w: 100, h: 18, group: 'Assinatura' },
   name: { label: 'Nome', ic: '👤', w: 130, h: 18, group: 'Informações de contato' },
   email: { label: 'E-mail', ic: '✉️', w: 170, h: 18, group: 'Informações de contato' },
@@ -23,6 +23,24 @@ const FIELD_META = {
   checkbox: { label: 'Caixa de seleção', ic: '☑️', w: 16, h: 16, group: 'Entradas' },
   dropdown: { label: 'Lista suspensa', ic: '▾', w: 130, h: 18, group: 'Entradas' },
 };
+
+const PEN_SVG = '<svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M14.5 5.5l4 4L8 20H4v-4z"/></svg>';
+
+/* Carimbo "Assinado por:" (mesmo ID curto usado no PDF final: SHA-256 da imagem da assinatura) */
+async function sigId(dataUrl) {
+  try {
+    const bin = atob(dataUrl.split(',')[1] || ''), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', u));
+    return [...h].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16).toUpperCase() + '...';
+  } catch { return ''; }
+}
+function stampEl(dataUrl, initialsOnly) {
+  if (initialsOnly) return el('img', { src: dataUrl, class: 'sigimg' });
+  const id = el('span', { class: 'stid' });
+  sigId(dataUrl).then(v => { id.textContent = v; });
+  return el('div', { class: 'stamp' }, el('span', { class: 'stlb' }, 'Assinado por:'), el('img', { src: dataUrl, class: 'sigimg' }), id);
+}
 
 /* ---------- páginas do PDF com renderização preguiçosa (aguenta PDFs grandes) ---------- */
 function buildPages(container, pdf, metas, scale, onOverlay) {
